@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Agenda Neuropsicóloga Sheila Barbosa</title>
+<style>
+:root{
+  --bg:#f5f6fa; --card-bg:#ffffff; --text:#222222; --text-muted:#666666; --text-faint:#777777;
+  --primary:#5b4b8a; --primary-text:#ffffff;
+  --light-btn-bg:#eeeeee; --danger-bg:#ffe5e5; --danger-text:#aa0000;
+  --input-bg:#ffffff; --input-border:#dddddd;
+  --dayhead-bg:#eeeeee; --slot-bg:#fafafa; --slot-border:#eeeeee;
+  --slot-free-bg:#f1f1f1; --slot-free-text:#999999;
+  --confirmado-bg:#e4f5e8; --confirmado-border:#28a745;
+  --aguardando-bg:#fff5d8; --aguardando-border:#e0a400;
+  --cancelado-bg:#ffe7e7; --cancelado-border:#dd3333;
+  --atendido-bg:#e6eefc; --atendido-border:#4774c7;
+  --stat-bg:#f7f4ff; --modal-overlay:rgba(0,0,0,0.53); --shadow:0 2px 8px rgba(0,0,0,0.06);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#15121e; --card-bg:#211d30; --text:#eeecf5; --text-muted:#a79fc0; --text-faint:#8f88a8;
+    --primary:#7d68c2; --primary-text:#ffffff;
+    --light-btn-bg:#332e4a; --danger-bg:#3a1f22; --danger-text:#ff8a8a;
+    --input-bg:#241f36; --input-border:#3d3856;
+    --dayhead-bg:#2c2840; --slot-bg:#211d30; --slot-border:#332e4a;
+    --slot-free-bg:#241f36; --slot-free-text:#7d7796;
+    --confirmado-bg:#1c3324; --confirmado-border:#3ecf72;
+    --aguardando-bg:#3a2f14; --aguardando-border:#e8b93a;
+    --cancelado-bg:#3a1f22; --cancelado-border:#e0555a;
+    --atendido-bg:#1c2740; --atendido-border:#6a97e0;
+    --stat-bg:#241f3a; --modal-overlay:rgba(0,0,0,0.66); --shadow:0 2px 8px rgba(0,0,0,0.3);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15121e; --card-bg:#211d30; --text:#eeecf5; --text-muted:#a79fc0; --text-faint:#8f88a8;
+  --primary:#7d68c2; --primary-text:#ffffff;
+  --light-btn-bg:#332e4a; --danger-bg:#3a1f22; --danger-text:#ff8a8a;
+  --input-bg:#241f36; --input-border:#3d3856;
+  --dayhead-bg:#2c2840; --slot-bg:#211d30; --slot-border:#332e4a;
+  --slot-free-bg:#241f36; --slot-free-text:#7d7796;
+  --confirmado-bg:#1c3324; --confirmado-border:#3ecf72;
+  --aguardando-bg:#3a2f14; --aguardando-border:#e8b93a;
+  --cancelado-bg:#3a1f22; --cancelado-border:#e0555a;
+  --atendido-bg:#1c2740; --atendido-border:#6a97e0;
+  --stat-bg:#241f3a; --modal-overlay:rgba(0,0,0,0.66); --shadow:0 2px 8px rgba(0,0,0,0.3);
+}
+*{box-sizing:border-box} body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text)}
+header{background:var(--primary);color:var(--primary-text);padding:18px 16px;position:sticky;top:0;z-index:5}
+h1{font-size:22px;margin:0 0 5px}.sub{opacity:.85;font-size:13px}
+main{padding:14px;max-width:900px;margin:auto}.card{background:var(--card-bg);border-radius:14px;padding:15px;margin-bottom:14px;box-shadow:var(--shadow)}
+.row{display:flex;gap:8px;align-items:center}.between{justify-content:space-between}
+button{border:0;border-radius:10px;padding:11px 14px;font-weight:bold;cursor:pointer;color:var(--text)}
+.primary{background:var(--primary);color:var(--primary-text)}.light{background:var(--light-btn-bg)}.danger{background:var(--danger-bg);color:var(--danger-text)}
+input,select,textarea{width:100%;padding:11px;border:1px solid var(--input-border);border-radius:9px;font-size:15px;background:var(--input-bg);color:var(--text)}
+label{font-size:12px;color:var(--text-muted);display:block;margin:9px 0 4px}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;overflow-x:auto}
+.day{min-width:105px}.dayhead{text-align:center;padding:8px;background:var(--dayhead-bg);border-radius:8px;font-size:12px;font-weight:bold}
+.slot{min-height:66px;margin-top:5px;border-radius:9px;padding:7px;background:var(--slot-bg);border:1px solid var(--slot-border);font-size:12px;cursor:pointer;color:var(--text)}.slot + .slot{margin-top:4px}
+.slot.free{background:var(--slot-free-bg);color:var(--slot-free-text);text-align:center;padding-top:22px}
+.slot.confirmado{background:var(--confirmado-bg);border-left:4px solid var(--confirmado-border)}
+.slot.aguardando{background:var(--aguardando-bg);border-left:4px solid var(--aguardando-border)}
+.slot.cancelado{background:var(--cancelado-bg);border-left:4px solid var(--cancelado-border)}
+.slot.atendido{background:var(--atendido-bg);border-left:4px solid var(--atendido-border)}
+.name{font-weight:bold}.time{font-size:11px;color:var(--text-muted)}.status{font-size:10px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.stat{background:var(--stat-bg);padding:12px;border-radius:10px}.num{font-size:22px;font-weight:bold}
+.modal{position:fixed;inset:0;background:var(--modal-overlay);display:none;align-items:flex-end;z-index:10}.modal.show{display:flex}
+.modalbox{background:var(--card-bg);color:var(--text);width:100%;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:18px}
+.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
+small{color:var(--text-faint)}
+@media(min-width:700px){.modal{align-items:center}.modalbox{max-width:520px;margin:auto;border-radius:18px}}
+</style>
+</head>
+<body>
+<header><h1>Agenda Neuropsicóloga Sheila Barbosa</h1><div class="sub" id="today"></div></header>
+<main>
+<div class="card">
+  <div class="row between">
+    <button class="light" onclick="changeWeek(-1)">‹ Semana</button>
+    <strong id="weekTitle"></strong>
+    <button class="light" onclick="changeWeek(1)">Semana ›</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="row between"><strong>Resumo da semana</strong><button class="primary" onclick="openNew()">+ Atendimento</button></div>
+  <small style="display:block;margin-top:7px">Vários profissionais podem atender no mesmo horário. Pacientes, equipe e pacotes ficam cadastrados para seleção rápida. Atendimentos podem ser semanais ou quinzenais.</small>
+  <div class="stats" style="margin-top:10px">
+    <div class="stat"><small>Atendimentos</small><div class="num" id="count"></div></div>
+    <div class="stat"><small>Confirmados</small><div class="num" id="confirmed"></div></div>
+    <div class="stat"><small>Livres</small><div class="num" id="free"></div></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="grid" id="calendar"></div>
+</div>
+
+<div class="card">
+  <strong>Atalhos</strong>
+  <div class="actions">
+    <button class="light" onclick="showToday()">📅 Hoje</button>
+    <button class="light" onclick="openPatients()">👥 Pacientes</button>
+    <button class="light" onclick="openPatientDetails()">📋 Ficha do paciente</button>
+    <button class="light" onclick="openProfessionals()">👩‍⚕️ Profissionais</button>
+    <button class="light" onclick="openPackages()">🎟️ Pacotes</button>
+    <button class="light" onclick="openFinance()">💰 Financeiro</button>
+    <button class="light" onclick="exportData()">💾 Exportar agenda</button>
+  </div>
+</div>
+</main>
+
+<div class="modal" id="modal"><div class="modalbox">
+  <div class="row between"><h2 id="modalTitle" style="margin:0">Novo atendimento</h2><button class="light" onclick="closeModal()">✕</button></div>
+  <input type="hidden" id="editId">
+  <label>Paciente</label>
+  <select id="patientSelect" onchange="syncPatientName()"></select>
+  <input id="patient" placeholder="Nome do paciente" style="display:none">
+  <label>Telefone do paciente</label>
+  <input id="patientPhone" type="tel" placeholder="(51) 99999-9999">
+  <label>Data</label><input id="date" type="date">
+  <label>Horário</label><input id="time" type="time">
+  <label>Atendimento recorrente?</label>
+  <select id="recurring" onchange="toggleRecurring()">
+    <option value="nao">Não</option>
+    <option value="semanal">Sim — semanal</option>
+    <option value="quinzenal">Sim — quinzenal</option>
+  </select>
+  <div id="recurringOptions" style="display:none">
+    <label>Quantidade de ocorrências</label>
+    <input id="recurringCount" type="number" min="2" max="52" value="8">
+    <small>O primeiro atendimento é a data escolhida. As próximas serão criadas automaticamente.</small>
+  </div>
+  <label>Duração</label><select id="duration"><option>50 minutos</option><option>60 minutos</option></select>
+  <label>Profissional responsável pelo atendimento</label>
+<select id="professionalSelect" onchange="syncProfessionalName()"></select>
+<input id="professional" placeholder="Nome do profissional" style="display:none">
+<small>Cadastre a equipe pelos atalhos e depois basta selecionar o profissional.</small>
+<label>Modalidade</label>
+<select id="type"><option>Particular</option><option>Moinhos</option><option>Social</option></select>
+  <label>Valor do atendimento (R$)</label><input id="value" type="number" step="0.01" placeholder="150">
+  <label>Forma de pagamento</label>
+  <select id="paymentMethod" onchange="togglePackage()">
+    <option>Avulso</option>
+    <option>Pacote</option>
+  </select>
+  <div id="packageOptions" style="display:none">
+    <label>Pacote</label><select id="packageSelect"></select>
+    <small>Ao salvar, este atendimento consumirá 1 crédito do pacote.</small>
+  </div>
+  <label>Status</label><select id="status"><option value="confirmado">Confirmado</option><option value="aguardando">Aguardando confirmação</option><option value="cancelado">Cancelado</option><option value="atendido">Atendido</option></select>
+  <label>Observação</label><textarea id="note" rows="2"></textarea>
+  <div class="actions">
+    <button class="primary" onclick="saveAppointment()">Salvar</button>
+    <button class="danger" id="deleteBtn" onclick="deleteAppointment()" style="display:none">Excluir</button>
+  </div>
+</div></div>
+
+<script>
+const KEY='agenda_psicologa_v1';
+let data=JSON.parse(localStorage.getItem(KEY)||'[]');
+let patients=JSON.parse(localStorage.getItem(KEY+'_patients')||'[]');
+let professionals=JSON.parse(localStorage.getItem(KEY+'_professionals')||'[]');
+let packages=JSON.parse(localStorage.getItem(KEY+'_packages')||'[]');
+let patientPhones=JSON.parse(localStorage.getItem(KEY+'_patientPhones')||'{}');
+
+function saveAll(){
+  localStorage.setItem(KEY,JSON.stringify(data));
+  localStorage.setItem(KEY+'_patients',JSON.stringify(patients));
+  localStorage.setItem(KEY+'_professionals',JSON.stringify(professionals));
+  localStorage.setItem(KEY+'_packages',JSON.stringify(packages));
+  localStorage.setItem(KEY+'_patientPhones',JSON.stringify(patientPhones));
+}
+function ensureRegistries(){
+  data.forEach(a=>{
+    if(a.patient && !patients.includes(a.patient)) patients.push(a.patient);
+    if(a.professional && !professionals.includes(a.professional)) professionals.push(a.professional);
+  });
+  saveAll();
+}
+ensureRegistries();
+let weekOffset=0;
+const pad=n=>String(n).padStart(2,'0');
+const iso=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const brDate=s=>{let [y,m,d]=s.split('-');return `${d}/${m}/${y}`};
+function monday(d){let x=new Date(d);let day=x.getDay();let diff=day===0?-6:1-day;x.setDate(x.getDate()+diff);x.setHours(0,0,0,0);return x}
+function startWeek(){let d=monday(new Date());d.setDate(d.getDate()+weekOffset*7);return d}
+function fmtShort(d){return d.toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit'}).replace('.','')}
+function render(){
+ let s=startWeek(), cal=document.getElementById('calendar');cal.innerHTML='';
+ document.getElementById('weekTitle').textContent=`${s.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})} – ${new Date(s.getTime()+6*864e5).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}`;
+ let total=0, conf=0;
+ for(let i=0;i<7;i++){
+   let d=new Date(s);d.setDate(s.getDate()+i);let ds=iso(d);
+   let col=document.createElement('div');col.className='day';
+   col.innerHTML=`<div class="dayhead">${fmtShort(d)}</div>`;
+   let appts=data.filter(a=>a.date===ds).sort((a,b)=>a.time.localeCompare(b.time));
+   if(!appts.length) col.innerHTML+=`<div class="slot free" onclick="openNew('${ds}')">+ horário livre</div>`;
+   // Group by time so simultaneous appointments appear together.
+   let groups={};
+   appts.forEach(a=>(groups[a.time]??=[]).push(a));
+   Object.keys(groups).sort().forEach(t=>{
+     let group=groups[t];
+     group.forEach(a=>{
+       total++; if(a.status==='confirmado')conf++;
+       let div=document.createElement('div');div.className='slot '+a.status;
+       div.innerHTML=`<div class="time">${a.time}</div>
+         <div class="name">${escapeHtml(a.patient)}</div>
+         <div class="status">${escapeHtml(a.professional||'Profissional não informado')}</div>
+         <div class="status">${label(a.status)}${a.type?' • '+a.type:''}${a.recurrence?' • 🔄':''}${a.paymentMethod==='Pacote'?' • 🎟️ '+packageProgress(a):''}</div>`;
+       div.onclick=()=>editAppointment(a.id);col.appendChild(div);
+     });
+     if(group.length>1){
+       let badge=document.createElement('div');
+       badge.style.cssText='font-size:10px;color:#5b4b8a;text-align:center;margin:2px 0 6px;font-weight:bold';
+       badge.textContent=`${group.length} atendimentos simultâneos`;
+       col.appendChild(badge);
+     }
+   });
+   cal.appendChild(col);
+ }
+ document.getElementById('count').textContent=total;
+ document.getElementById('confirmed').textContent=conf;
+ document.getElementById('free').textContent=total?Math.max(0,35-total):35;
+ document.getElementById('today').textContent=new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+}
+function label(s){return {confirmado:'Confirmado',aguardando:'Aguardando',cancelado:'Cancelado',atendido:'Atendido'}[s]}
+function packageProgress(a){
+ if(!a.packageId) return '';
+ const pkg=packages.find(p=>p.id===a.packageId);
+ if(!pkg) return '';
+ const used=data.filter(x=>x.packageId===a.packageId && x.paymentMethod==='Pacote').sort((x,y)=>(x.date+x.time).localeCompare(y.date+y.time));
+ const idx=used.findIndex(x=>x.id===a.id)+1;
+ return idx>0?`${idx}/${pkg.total}`:'';
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+function changeWeek(n){weekOffset+=n;render()}
+function showToday(){weekOffset=0;render();window.scrollTo({top:0,behavior:'smooth'})}
+function populateSelects(selectedPatient='', selectedProfessional=''){
+ const ps=document.getElementById('patientSelect');
+ ps.innerHTML='<option value="">Selecione o paciente</option><option value="__new__">+ Novo paciente...</option>'+patients.slice().sort().map(n=>`<option>${escapeHtml(n)}</option>`).join('');
+ if(selectedPatient && !patients.includes(selectedPatient)) ps.innerHTML+=`<option>${escapeHtml(selectedPatient)}</option>`;
+ ps.value=selectedPatient;
+ document.getElementById('patient').style.display='none';
+ document.getElementById('patientPhone').value=patientPhones[selectedPatient]||'';
+ const pr=document.getElementById('professionalSelect');
+ pr.innerHTML='<option value="">Selecione o profissional</option><option value="__new__">+ Novo profissional...</option>'+professionals.slice().sort().map(n=>`<option>${escapeHtml(n)}</option>`).join('');
+ if(selectedProfessional && !professionals.includes(selectedProfessional)) pr.innerHTML+=`<option>${escapeHtml(selectedProfessional)}</option>`;
+ pr.value=selectedProfessional;
+ document.getElementById('professional').style.display='none';
+}
+function syncPatientName(){
+ const sel=document.getElementById('patientSelect');
+ const input=document.getElementById('patient');
+ if(sel.value==='__new__'){
+   input.style.display='block';input.value='';input.focus();
+   document.getElementById('patientPhone').value='';
+ }else{
+   input.style.display='none';input.value=sel.value;
+   document.getElementById('patientPhone').value=patientPhones[sel.value]||'';
+ }
+}
+function syncProfessionalName(){
+ const sel=document.getElementById('professionalSelect');
+ const input=document.getElementById('professional');
+ if(sel.value==='__new__'){
+   input.style.display='block';input.value='';input.focus();
+ }else{
+   input.style.display='none';input.value=sel.value;
+ }
+}
+function togglePackage(){
+ const v=document.getElementById('paymentMethod').value;
+ document.getElementById('packageOptions').style.display=v==='Pacote'?'block':'none';
+ populatePackageSelect();
+}
+function populatePackageSelect(selected=''){
+ const s=document.getElementById('packageSelect');
+ const name=document.getElementById('patientSelect').value;
+ const available=packages.filter(p=>p.patient===name && p.remaining>0);
+ s.innerHTML='<option value="">Selecione o pacote</option>'+available.map(p=>`<option value="${p.id}">${escapeHtml(p.label)} — ${p.remaining} crédito(s)</option>`).join('');
+ s.value=selected;
+}
+function openNew(ds){
+ document.getElementById('modalTitle').textContent='Novo atendimento';document.getElementById('editId').value='';
+ document.getElementById('patient').value='';populateSelects('','');document.getElementById('date').value=ds||iso(new Date());
+ document.getElementById('time').value='';document.getElementById('duration').value='50 minutos';
+ document.getElementById('recurring').value='nao';document.getElementById('recurringCount').value='8';document.getElementById('recurringOptions').style.display='none';
+ document.getElementById('professional').value='';document.getElementById('type').value='Particular';document.getElementById('value').value='150';
+ document.getElementById('paymentMethod').value='Avulso';document.getElementById('packageOptions').style.display='none';populatePackageSelect();
+ document.getElementById('status').value='confirmado';document.getElementById('note').value='';
+ document.getElementById('deleteBtn').style.display='none';document.getElementById('modal').classList.add('show');
+}
+function editAppointment(id){
+ let a=data.find(x=>x.id===id);if(!a)return;
+ openNew(a.date);document.getElementById('modalTitle').textContent='Editar atendimento';document.getElementById('editId').value=id;
+ populateSelects(a.patient||'',a.professional||'');
+ document.getElementById('patient').value=a.patient||'';
+ document.getElementById('professional').value=a.professional||'';
+ ['date','time','duration','type','value','status','note'].forEach(k=>document.getElementById(k).value=a[k]||'');
+ document.getElementById('paymentMethod').value=a.paymentMethod||'Avulso';
+ document.getElementById('packageOptions').style.display=a.paymentMethod==='Pacote'?'block':'none';
+ populatePackageSelect(a.packageId||'');
+ document.getElementById('recurring').value='nao';document.getElementById('recurringCount').value='8';document.getElementById('recurringOptions').style.display='none';
+ document.getElementById('deleteBtn').style.display='inline-block';
+}
+function closeModal(){document.getElementById('modal').classList.remove('show')}
+function toggleRecurring(){
+ const v=document.getElementById('recurring').value;
+ document.getElementById('recurringOptions').style.display=v==='nao'?'none':'block';
+}
+function saveAppointment(){
+ const patientSel=document.getElementById('patientSelect').value;
+ const professionalSel=document.getElementById('professionalSelect').value;
+ const patient=patientSel==='__new__' ? document.getElementById('patient').value.trim() : patientSel;
+ const professional=professionalSel==='__new__' ? document.getElementById('professional').value.trim() : professionalSel;
+ let a={id:document.getElementById('editId').value||Date.now().toString(),
+ patient,date:document.getElementById('date').value,time:document.getElementById('time').value,
+ duration:document.getElementById('duration').value,professional,type:document.getElementById('type').value,value:parseFloat(document.getElementById('value').value)||0,
+ paymentMethod:document.getElementById('paymentMethod').value,packageId:document.getElementById('packageSelect').value||'',
+ status:document.getElementById('status').value,note:document.getElementById('note').value};
+ if(!a.patient||!a.date||!a.time){alert('Preencha paciente, data e horário.');return}
+ if(!a.professional){alert('Selecione o profissional responsável.');return}
+
+ if(!patients.includes(a.patient)) patients.push(a.patient);
+ if(!professionals.includes(a.professional)) professionals.push(a.professional);
+ const phone=document.getElementById('patientPhone').value.trim();
+ if(phone) patientPhones[a.patient]=phone;
+
+ let idx=data.findIndex(x=>x.id===a.id);
+ if(idx>=0){
+   // If an existing package appointment is changed away from the package, return its credit.
+   const old=data[idx];
+   if(old.paymentMethod==='Pacote' && old.packageId && old.packageId!==a.packageId){
+     const op=packages.find(p=>p.id===old.packageId); if(op) op.remaining=Math.min(op.total,op.remaining+1);
+   }
+   if(a.paymentMethod==='Pacote'){
+     const pkg=packages.find(p=>p.id===a.packageId);
+     if(!pkg || pkg.remaining<=0){alert('Este pacote não possui créditos disponíveis.');return}
+     // Only consume if it wasn't already consuming this same package.
+     if(!(old.paymentMethod==='Pacote' && old.packageId===a.packageId)) pkg.remaining--;
+   }
+   data[idx]=a;
+ }else{
+   const recurrence=document.getElementById('recurring').value;
+   if(recurrence==='nao'){
+     if(a.paymentMethod==='Pacote'){
+       const pkg=packages.find(p=>p.id===a.packageId);
+       if(!pkg || pkg.remaining<=0){alert('Este pacote não possui créditos disponíveis.');return}
+       pkg.remaining--;
+     }
+     data.push(a);
+   }else{
+     const count=parseInt(document.getElementById('recurringCount').value,10);
+     if(!count || count<2 || count>52){alert('Informe entre 2 e 52 ocorrências.');return}
+     let pkg=null, pkgCount=count;
+     if(a.paymentMethod==='Pacote'){
+       pkg=packages.find(p=>p.id===a.packageId);
+       const available=pkg?pkg.remaining:0;
+       if(available<=0){alert('Este pacote não possui créditos disponíveis.');return}
+       if(available<count){
+         const ok=confirm(`Este pacote só tem ${available} crédito(s) disponível(is) para os ${count} atendimentos da recorrência.\n\nOs primeiros ${available} serão vinculados ao pacote (consumindo os créditos) e os demais ${count-available} serão criados como Avulso, só reservando o horário — depois é só editar cada um e vincular ao próximo pacote quando a paciente renovar.\n\nContinuar?`);
+         if(!ok) return;
+         pkgCount=available;
+       }
+     }
+     const step=recurrence==='quinzenal'?14:7;
+     let d=new Date(a.date+'T12:00:00');
+     for(let i=0;i<count;i++){
+       const usesPackage=pkg && i<pkgCount;
+       data.push({...a,id:(Date.now()+Math.random()+i).toString(),date:iso(d),recurrence:recurrence,recurrenceGroup:a.id,
+         paymentMethod:usesPackage?'Pacote':'Avulso',
+         packageId:usesPackage?a.packageId:''});
+       d.setDate(d.getDate()+step);
+     }
+     if(pkg) pkg.remaining-=pkgCount;
+   }
+ }
+ saveAll();closeModal();render();
+}
+function deleteAppointment(){
+ let id=document.getElementById('editId').value;
+ if(confirm('Excluir este atendimento?')){
+   const old=data.find(a=>a.id===id);
+   if(old && old.paymentMethod==='Pacote' && old.packageId){
+     const pkg=packages.find(p=>p.id===old.packageId); if(pkg) pkg.remaining=Math.min(pkg.total,pkg.remaining+1);
+   }
+   data=data.filter(a=>a.id!==id);saveAll();closeModal();render()
+ }
+}
+function openPatientDetails(){
+ const s=document.getElementById('patientDetailSelect');
+ s.innerHTML='<option value="">Selecione o paciente</option>'+patients.slice().sort().map(n=>`<option>${escapeHtml(n)}</option>`).join('');
+ document.getElementById('patientDetails').innerHTML='';
+ document.getElementById('patientModal').classList.add('show');
+}
+function closePatientDetails(){document.getElementById('patientModal').classList.remove('show')}
+function renderPatientDetails(){
+ const name=document.getElementById('patientDetailSelect').value;
+ const box=document.getElementById('patientDetails');
+ if(!name){box.innerHTML='';return}
+ const ap=data.filter(a=>a.patient===name).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+ const pk=packages.filter(p=>p.patient===name);
+ const future=ap.filter(a=>a.date>=iso(new Date()) && a.status!=='cancelado');
+ const history=ap.filter(a=>a.date<iso(new Date()) || a.status==='atendido');
+ let total=ap.reduce((s,a)=>s+(a.value||0),0);
+ let packageHtml=pk.length ? pk.map(p=>`<div class="card" style="margin-top:8px;padding:10px"><b>${escapeHtml(p.label)}</b><br>Créditos: <b>${p.remaining}</b> de ${p.total}<br>Valor pago: R$ ${p.price.toFixed(2)}</div>`).join('') : '<small>Nenhum pacote cadastrado.</small>';
+ let nextHtml=future.length ? future.slice(0,10).map(a=>`<div style="padding:8px 0;border-bottom:1px solid #eee"><b>${brDate(a.date)} ${a.time}</b> — ${escapeHtml(a.professional)}<br><small>${a.type} • ${label(a.status)}${a.paymentMethod==='Pacote'?' • 🎟️ '+packageProgress(a):''}</small></div>`).join('') : '<small>Nenhum próximo atendimento.</small>';
+ let histHtml=history.slice(-10).reverse().map(a=>`<div style="padding:8px 0;border-bottom:1px solid #eee">${brDate(a.date)} ${a.time} — ${escapeHtml(a.professional)} — ${label(a.status)}</div>`).join('') || '<small>Sem histórico.</small>';
+ const phone=patientPhones[name];
+ box.innerHTML=`<h3 style="margin-bottom:6px">${escapeHtml(name)}</h3>
+   ${phone?`<div>📞 ${escapeHtml(phone)}</div>`:''}
+   <div class="stats"><div class="stat"><small>Atendimentos</small><div class="num">${ap.length}</div></div>
+   <div class="stat"><small>Valor lançado</small><div class="num" style="font-size:16px">R$ ${total.toFixed(2)}</div></div>
+   <div class="stat"><small>Pacotes</small><div class="num">${pk.length}</div></div></div>
+   <h3>🎟️ Créditos</h3>${packageHtml}
+   <h3>📅 Próximos atendimentos</h3>${nextHtml}
+   <h3>🕘 Histórico recente</h3>${histHtml}`;
+}
+function openPatients(){
+ let names=[...new Set(data.map(a=>a.patient).filter(Boolean))].sort();
+ alert(names.length?`Pacientes cadastrados nesta agenda:\n\n${names.join('\n')}`:'Ainda não há pacientes cadastrados.');
+}
+function openProfessionals(){
+ let names=[...new Set(data.map(a=>a.professional).filter(Boolean))].sort();
+ if(!names.length){alert('Ainda não há profissionais cadastrados nos atendimentos.');return}
+ let lines=names.map(n=>{
+   let total=data.filter(a=>a.professional===n).length;
+   return `${n} — ${total} atendimento${total===1?'':'s'}`;
+ }).join('\n');
+ alert('Profissionais da equipe nesta agenda:\n\n'+lines);
+}
+function openPackages(){
+ let lines=packages.map(p=>`${p.patient} — ${p.label} — ${p.remaining}/${p.total} crédito(s) restantes — R$ ${p.price.toFixed(2)}`).join('\n');
+ if(!lines) lines='Nenhum pacote cadastrado.';
+ alert('Pacotes:\n\n'+lines+'\n\nVocê pode criar um novo pacote pelo cadastro rápido que aparece em seguida.');
+ const patient=prompt('Nome do paciente para novo pacote (Cancelar para sair):');
+ if(!patient) return;
+ const total=parseInt(prompt('Quantidade de atendimentos do pacote:', '4'),10);
+ if(!total || total<1) return;
+ const price=parseFloat(prompt('Valor total pago pelo pacote (R$):','600'));
+ if(isNaN(price)) return;
+ patients.includes(patient)||patients.push(patient);
+ packages.push({id:Date.now().toString(),patient,label:`Pacote ${total} atendimentos`,total,remaining:total,price,created:new Date().toISOString()});
+ saveAll();alert('Pacote criado com sucesso. Agora ele aparecerá ao escolher “Pacote” no atendimento.');
+}
+function openFinance(){
+ const month=prompt('Informe o mês para consolidar (MM/AAAA):', `${pad(new Date().getMonth()+1)}/${new Date().getFullYear()}`);
+ if(!month) return;
+ const [mm,yyyy]=month.split('/');
+ if(!mm||!yyyy) return;
+ const rows=data.filter(a=>a.date && a.date.slice(0,7)===`${yyyy}-${mm}`);
+ const total=rows.reduce((s,a)=>s+(a.value||0),0);
+ const paidPackages=rows.filter(a=>a.paymentMethod==='Pacote').length;
+ const avulsos=rows.filter(a=>a.paymentMethod!=='Pacote').reduce((s,a)=>s+(a.value||0),0);
+ const byProf={}; const byType={};
+ rows.forEach(a=>{
+   byProf[a.professional]=(byProf[a.professional]||0)+1;
+   byType[a.type]=(byType[a.type]||0)+1;
+ });
+ let msg=`CONSOLIDAÇÃO — ${month}\n\nAtendimentos: ${rows.length}\nValor lançado nos atendimentos: R$ ${total.toFixed(2)}\nAvulsos: R$ ${avulsos.toFixed(2)}\nAtendimentos debitados de pacotes: ${paidPackages}\n\nPor modalidade:\n`;
+ Object.keys(byType).forEach(k=>msg+=`${k}: ${byType[k]}\n`);
+ msg+='\nPor profissional:\n';
+ Object.keys(byProf).forEach(k=>msg+=`${k}: ${byProf[k]}\n`);
+ alert(msg);
+}
+function exportData(){
+ let backup={atendimentos:data,pacientes:patients,profissionais:professionals,packages};
+ let json=JSON.stringify(backup,null,2);
+ let filename='agenda-psicologa-backup-'+iso(new Date())+'.json';
+ let blob=new Blob([json],{type:'application/json'});let url=URL.createObjectURL(blob);
+ let a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url);
+}
+render();
+</script>
+
+<div class="modal" id="patientModal"><div class="modalbox">
+  <div class="row between"><h2 style="margin:0">Ficha do paciente</h2><button class="light" onclick="closePatientDetails()">✕</button></div>
+  <label>Paciente</label><select id="patientDetailSelect" onchange="renderPatientDetails()"></select>
+  <div id="patientDetails" style="margin-top:12px"></div>
+</div></div>
+</body>
+</html>
