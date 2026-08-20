@@ -278,7 +278,7 @@ async function importContact(){
    if(c.name && c.name.length) document.getElementById('patient').value=c.name[0];
    if(c.tel && c.tel.length) document.getElementById('patientPhone').value=c.tel[0];
  }catch(e){
-   alert('Não foi possível acessar os contatos agora.');
+   alert('Não foi possível acessar os contatos agora.\n\nDetalhe técnico: '+(e&&e.name?e.name+' — '+e.message:String(e)));
  }
 }
 function syncProfessionalName(){
