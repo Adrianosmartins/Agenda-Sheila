@@ -432,18 +432,42 @@ function openProfessionals(){
  alert('Profissionais da equipe nesta agenda:\n\n'+lines);
 }
 function openPackages(){
- let lines=packages.map(p=>`${p.patient} — ${p.label} — ${p.remaining}/${p.total} crédito(s) restantes — R$ ${p.price.toFixed(2)}`).join('\n');
- if(!lines) lines='Nenhum pacote cadastrado.';
- alert('Pacotes:\n\n'+lines+'\n\nVocê pode criar um novo pacote pelo cadastro rápido que aparece em seguida.');
- const patient=prompt('Nome do paciente para novo pacote (Cancelar para sair):');
- if(!patient) return;
- const total=parseInt(prompt('Quantidade de atendimentos do pacote:', '4'),10);
- if(!total || total<1) return;
- const price=parseFloat(prompt('Valor total pago pelo pacote (R$):','600'));
- if(isNaN(price)) return;
- patients.includes(patient)||patients.push(patient);
+ const ps=document.getElementById('newPkgPatientSelect');
+ ps.innerHTML=patients.slice().sort().map(n=>`<option>${escapeHtml(n)}</option>`).join('')||'<option value="">Cadastre um paciente primeiro</option>';
+ renderPackagesList();
+ document.getElementById('packagesModal').classList.add('show');
+}
+function closePackages(){document.getElementById('packagesModal').classList.remove('show')}
+function renderPackagesList(){
+ const box=document.getElementById('packagesList');
+ if(!packages.length){box.innerHTML='<small>Nenhum pacote cadastrado.</small>';return}
+ box.innerHTML=packages.slice().sort((a,b)=>a.patient.localeCompare(b.patient)).map(p=>`
+   <div class="card" style="margin-top:8px;padding:10px">
+     <div class="row between">
+       <div><b>${escapeHtml(p.patient)}</b><br><small>${escapeHtml(p.label)} — ${p.remaining}/${p.total} crédito(s) — R$ ${p.price.toFixed(2)}</small></div>
+       <button class="danger" onclick="deletePackage('${p.id}')">Excluir</button>
+     </div>
+   </div>`).join('');
+}
+function deletePackage(id){
+ const pkg=packages.find(p=>p.id===id);
+ if(!pkg) return;
+ const linked=data.filter(a=>a.packageId===id);
+ let msg=`Excluir o pacote "${pkg.label}" de ${pkg.patient}?`;
+ if(linked.length) msg+=`\n\n${linked.length} atendimento(s) estão vinculados a este pacote. Eles não serão apagados, mas ficarão sem pacote válido (o indicador de crédito some do card).`;
+ if(!confirm(msg)) return;
+ packages=packages.filter(p=>p.id!==id);
+ saveAll();renderPackagesList();
+}
+function createPackage(){
+ const patient=document.getElementById('newPkgPatientSelect').value;
+ if(!patient){alert('Cadastre um paciente antes de criar um pacote (em um atendimento, ou pelo atalho Pacientes).');return}
+ const total=parseInt(document.getElementById('newPkgTotal').value,10);
+ if(!total || total<1){alert('Informe uma quantidade válida de atendimentos.');return}
+ const price=parseFloat(document.getElementById('newPkgPrice').value);
+ if(isNaN(price)){alert('Informe um valor válido.');return}
  packages.push({id:Date.now().toString(),patient,label:`Pacote ${total} atendimentos`,total,remaining:total,price,created:new Date().toISOString()});
- saveAll();alert('Pacote criado com sucesso. Agora ele aparecerá ao escolher “Pacote” no atendimento.');
+ saveAll();renderPackagesList();
 }
 function openFinance(){
  const month=prompt('Informe o mês para consolidar (MM/AAAA):', `${pad(new Date().getMonth()+1)}/${new Date().getFullYear()}`);
@@ -479,6 +503,19 @@ render();
   <div class="row between"><h2 style="margin:0">Ficha do paciente</h2><button class="light" onclick="closePatientDetails()">✕</button></div>
   <label>Paciente</label><select id="patientDetailSelect" onchange="renderPatientDetails()"></select>
   <div id="patientDetails" style="margin-top:12px"></div>
+</div></div>
+
+<div class="modal" id="packagesModal"><div class="modalbox">
+  <div class="row between"><h2 style="margin:0">Pacotes</h2><button class="light" onclick="closePackages()">✕</button></div>
+  <div id="packagesList" style="margin-top:12px"></div>
+  <h3 style="margin-top:18px">Novo pacote</h3>
+  <label>Paciente</label>
+  <select id="newPkgPatientSelect"></select>
+  <label>Quantidade de atendimentos</label>
+  <input id="newPkgTotal" type="number" min="1" value="4">
+  <label>Valor total pago (R$)</label>
+  <input id="newPkgPrice" type="number" step="0.01" value="600">
+  <div class="actions"><button class="primary" onclick="createPackage()">Criar pacote</button></div>
 </div></div>
 </body>
 </html>
