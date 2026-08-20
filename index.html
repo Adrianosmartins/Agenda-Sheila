@@ -119,6 +119,7 @@ small{color:var(--text-faint)}
   <input id="patient" placeholder="Nome do paciente" style="display:none">
   <label>Telefone do paciente</label>
   <input id="patientPhone" type="tel" placeholder="(51) 99999-9999">
+  <button type="button" id="importContactBtn" class="light" style="display:none;margin-top:6px" onclick="importContact()">📱 Importar dos contatos</button>
   <label>Data</label><input id="date" type="date">
   <label>Horário</label><input id="time" type="time">
   <label>Atendimento recorrente?</label>
@@ -244,6 +245,7 @@ function populateSelects(selectedPatient='', selectedProfessional=''){
  ps.value=selectedPatient;
  document.getElementById('patient').style.display='none';
  document.getElementById('patientPhone').value=patientPhones[selectedPatient]||'';
+ document.getElementById('importContactBtn').style.display='none';
  const pr=document.getElementById('professionalSelect');
  pr.innerHTML='<option value="">Selecione o profissional</option><option value="__new__">+ Novo profissional...</option>'+professionals.slice().sort().map(n=>`<option>${escapeHtml(n)}</option>`).join('');
  if(selectedProfessional && !professionals.includes(selectedProfessional)) pr.innerHTML+=`<option>${escapeHtml(selectedProfessional)}</option>`;
@@ -253,12 +255,30 @@ function populateSelects(selectedPatient='', selectedProfessional=''){
 function syncPatientName(){
  const sel=document.getElementById('patientSelect');
  const input=document.getElementById('patient');
+ const importBtn=document.getElementById('importContactBtn');
  if(sel.value==='__new__'){
    input.style.display='block';input.value='';input.focus();
    document.getElementById('patientPhone').value='';
+   importBtn.style.display=supportsContactPicker()?'block':'none';
  }else{
    input.style.display='none';input.value=sel.value;
    document.getElementById('patientPhone').value=patientPhones[sel.value]||'';
+   importBtn.style.display='none';
+ }
+}
+function supportsContactPicker(){
+ return !!(navigator.contacts && navigator.contacts.select && window.ContactsManager);
+}
+async function importContact(){
+ if(!supportsContactPicker()) return;
+ try{
+   const contacts=await navigator.contacts.select(['name','tel'],{multiple:false});
+   if(!contacts.length) return;
+   const c=contacts[0];
+   if(c.name && c.name.length) document.getElementById('patient').value=c.name[0];
+   if(c.tel && c.tel.length) document.getElementById('patientPhone').value=c.tel[0];
+ }catch(e){
+   alert('Não foi possível acessar os contatos agora.');
  }
 }
 function syncProfessionalName(){
