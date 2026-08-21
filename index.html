@@ -7,11 +7,11 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<meta name="theme-color" content="#5b4b8a">
+<meta name="theme-color" content="#4169e1">
 <style>
 :root{
   --bg:#f5f6fa; --card-bg:#ffffff; --text:#222222; --text-muted:#666666; --text-faint:#777777;
-  --primary:#5b4b8a; --primary-text:#ffffff;
+  --primary:#4169e1; --primary-text:#ffffff;
   --light-btn-bg:#eeeeee; --danger-bg:#ffe5e5; --danger-text:#aa0000;
   --input-bg:#ffffff; --input-border:#dddddd;
   --dayhead-bg:#eeeeee; --slot-bg:#fafafa; --slot-border:#eeeeee;
@@ -20,12 +20,12 @@
   --aguardando-bg:#fff5d8; --aguardando-border:#e0a400;
   --cancelado-bg:#ffe7e7; --cancelado-border:#dd3333;
   --atendido-bg:#e6eefc; --atendido-border:#4774c7;
-  --stat-bg:#f7f4ff; --modal-overlay:rgba(0,0,0,0.53); --shadow:0 2px 8px rgba(0,0,0,0.06);
+  --stat-bg:#eef2ff; --modal-overlay:rgba(0,0,0,0.53); --shadow:0 2px 8px rgba(0,0,0,0.06);
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --bg:#15121e; --card-bg:#211d30; --text:#eeecf5; --text-muted:#a79fc0; --text-faint:#8f88a8;
-    --primary:#7d68c2; --primary-text:#ffffff;
+    --primary:#5c85f0; --primary-text:#ffffff;
     --light-btn-bg:#332e4a; --danger-bg:#3a1f22; --danger-text:#ff8a8a;
     --input-bg:#241f36; --input-border:#3d3856;
     --dayhead-bg:#2c2840; --slot-bg:#211d30; --slot-border:#332e4a;
@@ -34,12 +34,12 @@
     --aguardando-bg:#3a2f14; --aguardando-border:#e8b93a;
     --cancelado-bg:#3a1f22; --cancelado-border:#e0555a;
     --atendido-bg:#1c2740; --atendido-border:#6a97e0;
-    --stat-bg:#241f3a; --modal-overlay:rgba(0,0,0,0.66); --shadow:0 2px 8px rgba(0,0,0,0.3);
+    --stat-bg:#1c2440; --modal-overlay:rgba(0,0,0,0.66); --shadow:0 2px 8px rgba(0,0,0,0.3);
   }
 }
 :root[data-theme="dark"]{
   --bg:#15121e; --card-bg:#211d30; --text:#eeecf5; --text-muted:#a79fc0; --text-faint:#8f88a8;
-  --primary:#7d68c2; --primary-text:#ffffff;
+  --primary:#5c85f0; --primary-text:#ffffff;
   --light-btn-bg:#332e4a; --danger-bg:#3a1f22; --danger-text:#ff8a8a;
   --input-bg:#241f36; --input-border:#3d3856;
   --dayhead-bg:#2c2840; --slot-bg:#211d30; --slot-border:#332e4a;
@@ -48,7 +48,7 @@
   --aguardando-bg:#3a2f14; --aguardando-border:#e8b93a;
   --cancelado-bg:#3a1f22; --cancelado-border:#e0555a;
   --atendido-bg:#1c2740; --atendido-border:#6a97e0;
-  --stat-bg:#241f3a; --modal-overlay:rgba(0,0,0,0.66); --shadow:0 2px 8px rgba(0,0,0,0.3);
+  --stat-bg:#1c2440; --modal-overlay:rgba(0,0,0,0.66); --shadow:0 2px 8px rgba(0,0,0,0.3);
 }
 *{box-sizing:border-box} body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text)}
 header{background:var(--primary);color:var(--primary-text);padding:18px 16px;position:sticky;top:0;z-index:5}
@@ -218,7 +218,7 @@ function render(){
      });
      if(group.length>1){
        let badge=document.createElement('div');
-       badge.style.cssText='font-size:10px;color:#5b4b8a;text-align:center;margin:2px 0 6px;font-weight:bold';
+       badge.style.cssText='font-size:10px;color:#4169e1;text-align:center;margin:2px 0 6px;font-weight:bold';
        badge.textContent=`${group.length} atendimentos simultâneos`;
        col.appendChild(badge);
      }
