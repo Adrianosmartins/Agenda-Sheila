@@ -8,6 +8,9 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#4169e1">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <style>
 :root{
   --bg:#f5f6fa; --card-bg:#ffffff; --text:#222222; --text-muted:#666666; --text-faint:#777777;
@@ -77,6 +80,16 @@ small{color:var(--text-faint)}
 </style>
 </head>
 <body>
+<div class="modal show" id="loginScreen" style="align-items:center;z-index:20">
+  <div class="modalbox" style="max-width:340px">
+    <h2 style="margin-top:0">Entrar</h2>
+    <label>E-mail</label><input id="loginEmail" type="email" autocomplete="username">
+    <label>Senha</label><input id="loginPassword" type="password" autocomplete="current-password">
+    <div id="loginError" style="color:var(--danger-text);font-size:13px;margin-top:8px"></div>
+    <div class="actions"><button class="primary" onclick="doLogin()">Entrar</button></div>
+  </div>
+</div>
+<div id="appRoot" style="display:none">
 <header><h1>Agenda Neuropsicóloga Sheila Barbosa</h1><div class="sub" id="today"></div></header>
 <main>
 <div class="card">
@@ -111,6 +124,7 @@ small{color:var(--text-faint)}
     <button class="light" onclick="openPackages()">🎟️ Pacotes</button>
     <button class="light" onclick="openFinance()">💰 Financeiro</button>
     <button class="light" onclick="exportData()">💾 Exportar agenda</button>
+    <button class="light" onclick="doLogout()">🚪 Sair</button>
   </div>
 </div>
 </main>
@@ -164,27 +178,91 @@ small{color:var(--text-faint)}
 
 <script>
 const KEY='agenda_psicologa_v1';
-let data=JSON.parse(localStorage.getItem(KEY)||'[]');
-let patients=JSON.parse(localStorage.getItem(KEY+'_patients')||'[]');
-let professionals=JSON.parse(localStorage.getItem(KEY+'_professionals')||'[]');
-let packages=JSON.parse(localStorage.getItem(KEY+'_packages')||'[]');
-let patientPhones=JSON.parse(localStorage.getItem(KEY+'_patientPhones')||'{}');
+let data=[], patients=[], professionals=[], packages=[], patientPhones={};
+
+const firebaseConfig={
+  apiKey:"AIzaSyB9DhzY9TacaT5Fnf3-FgtJCZ-TgTiDgx8",
+  authDomain:"agenda-sheila.firebaseapp.com",
+  projectId:"agenda-sheila",
+  storageBucket:"agenda-sheila.firebasestorage.app",
+  messagingSenderId:"507301732779",
+  appId:"1:507301732779:web:bdd52185a03e71411f72ee"
+};
+firebase.initializeApp(firebaseConfig);
+const auth=firebase.auth();
+const db=firebase.firestore();
+const mainDocRef=db.collection('agenda').doc('main');
+let firestoreUnsub=null;
 
 function saveAll(){
-  localStorage.setItem(KEY,JSON.stringify(data));
-  localStorage.setItem(KEY+'_patients',JSON.stringify(patients));
-  localStorage.setItem(KEY+'_professionals',JSON.stringify(professionals));
-  localStorage.setItem(KEY+'_packages',JSON.stringify(packages));
-  localStorage.setItem(KEY+'_patientPhones',JSON.stringify(patientPhones));
+  mainDocRef.set({data,patients,professionals,packages,patientPhones})
+    .catch(e=>{console.error(e);alert('Não foi possível salvar na nuvem agora. Verifique sua internet e tente de novo.');});
 }
-function ensureRegistries(){
-  data.forEach(a=>{
-    if(a.patient && !patients.includes(a.patient)) patients.push(a.patient);
-    if(a.professional && !professionals.includes(a.professional)) professionals.push(a.professional);
+
+function doLogin(){
+  const email=document.getElementById('loginEmail').value.trim();
+  const password=document.getElementById('loginPassword').value;
+  document.getElementById('loginError').textContent='';
+  auth.signInWithEmailAndPassword(email,password).catch(()=>{
+    document.getElementById('loginError').textContent='E-mail ou senha incorretos.';
   });
-  saveAll();
 }
-ensureRegistries();
+function doLogout(){
+  if(confirm('Sair da agenda?')) auth.signOut();
+}
+
+function refreshOpenModals(){
+  if(document.getElementById('patientModal').classList.contains('show')) renderPatientDetails();
+  if(document.getElementById('packagesModal').classList.contains('show')) renderPackagesList();
+}
+
+function offerLocalMigrationIfAny(){
+  const localData=JSON.parse(localStorage.getItem(KEY)||'[]');
+  const localPatients=JSON.parse(localStorage.getItem(KEY+'_patients')||'[]');
+  const localProfessionals=JSON.parse(localStorage.getItem(KEY+'_professionals')||'[]');
+  const localPackages=JSON.parse(localStorage.getItem(KEY+'_packages')||'[]');
+  const localPhones=JSON.parse(localStorage.getItem(KEY+'_patientPhones')||'{}');
+  const hasLocal=localData.length||localPatients.length||localProfessionals.length||localPackages.length;
+  if(hasLocal && confirm('Encontramos dados salvos neste aparelho (pacientes, atendimentos, pacotes). Deseja enviá-los agora para a nuvem, para sincronizar com os outros dispositivos?\n\nSó faça isso uma vez, no primeiro aparelho que atualizar.')){
+    data=localData;patients=localPatients;professionals=localProfessionals;packages=localPackages;patientPhones=localPhones;
+    saveAll();
+  }else{
+    render();
+  }
+}
+
+function startFirestoreSync(){
+  let migrationChecked=false;
+  firestoreUnsub=mainDocRef.onSnapshot(doc=>{
+    const d=doc.data();
+    if(d){
+      data=d.data||[];patients=d.patients||[];professionals=d.professionals||[];packages=d.packages||[];patientPhones=d.patientPhones||{};
+      render();refreshOpenModals();
+    }else if(!migrationChecked){
+      migrationChecked=true;
+      offerLocalMigrationIfAny();
+    }else{
+      data=[];patients=[];professionals=[];packages=[];patientPhones={};
+      render();
+    }
+  },err=>{
+    console.error(err);
+    alert('Não foi possível conectar à agenda na nuvem. Verifique sua internet.');
+  });
+}
+
+auth.onAuthStateChanged(user=>{
+  if(user){
+    document.getElementById('loginScreen').classList.remove('show');
+    document.getElementById('appRoot').style.display='block';
+    startFirestoreSync();
+  }else{
+    if(firestoreUnsub){firestoreUnsub();firestoreUnsub=null;}
+    document.getElementById('loginScreen').classList.add('show');
+    document.getElementById('appRoot').style.display='none';
+  }
+});
+
 let weekOffset=0;
 const pad=n=>String(n).padStart(2,'0');
 const iso=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -520,7 +598,6 @@ function exportData(){
  let blob=new Blob([json],{type:'application/json'});let url=URL.createObjectURL(blob);
  let a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url);
 }
-render();
 </script>
 
 <div class="modal" id="patientModal"><div class="modalbox">
@@ -541,5 +618,6 @@ render();
   <input id="newPkgPrice" type="number" step="0.01" value="600">
   <div class="actions"><button class="primary" onclick="createPackage()">Criar pacote</button></div>
 </div></div>
+</div>
 </body>
 </html>
