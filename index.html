@@ -153,9 +153,8 @@ small{color:var(--text-faint)}
   </div>
   <label>Duração</label><select id="duration"><option>50 minutos</option><option>60 minutos</option></select>
   <label>Profissional responsável pelo atendimento</label>
-<select id="professionalSelect" onchange="syncProfessionalName()"></select>
-<input id="professional" placeholder="Nome do profissional" style="display:none">
-<small>Cadastre a equipe pelos atalhos e depois basta selecionar o profissional.</small>
+<select id="professionalSelect" onchange="populatePackageSelect()"></select>
+<small>Só aparecem profissionais com login cadastrado.</small>
 <label>Modalidade</label>
 <select id="type"><option>Particular</option><option>Moinhos</option><option>Social</option></select>
   <label>Valor do atendimento (R$)</label><input id="value" type="number" step="0.01" placeholder="150">
@@ -178,7 +177,13 @@ small{color:var(--text-faint)}
 
 <script>
 const KEY='agenda_psicologa_v1';
-let data=[], patients=[], professionals=[], packages=[], patientPhones={};
+// `data`/`patients`/`packages`/`patientPhones` are always a RENDER-ONLY view, recomputed by
+// mergeAndRender() from `profDocs` (one entry per professional). Never mutate them directly —
+// mutate the bucket from bucketFor(uid) and call persist(uid), then mergeAndRender().
+let data=[], patients=[], packages=[], patientPhones={};
+let professionalsRoster=[]; // [{uid,name}] — every professional this login can see
+let profDocs={}; // uid -> {displayName,data,patients,packages,patientPhones} — source of truth in memory
+let myUid=null, isAdmin=false, myDisplayName='';
 
 const firebaseConfig={
   apiKey:"AIzaSyB9DhzY9TacaT5Fnf3-FgtJCZ-TgTiDgx8",
@@ -191,12 +196,36 @@ const firebaseConfig={
 firebase.initializeApp(firebaseConfig);
 const auth=firebase.auth();
 const db=firebase.firestore();
-const mainDocRef=db.collection('agenda').doc('main');
+const mainDocRef=db.collection('agenda').doc('main'); // legacy pre-multi-professional doc, admin-only, read during one-time migration
 let firestoreUnsub=null;
 
-function saveAll(){
-  mainDocRef.set({data,patients,professionals,packages,patientPhones})
-    .catch(e=>{console.error(e);alert('Não foi possível salvar na nuvem agora. Verifique sua internet e tente de novo.');});
+function bucketFor(uid){
+  if(!profDocs[uid]) profDocs[uid]={displayName:'',data:[],patients:[],packages:[],patientPhones:{}};
+  return profDocs[uid];
+}
+function stripOwner(o){ const {_ownerUid,...rest}=o; return rest; }
+function persist(uid){
+  const b=bucketFor(uid);
+  db.collection('agenda').doc(uid).set({
+    displayName:b.displayName||(uid===myUid?myDisplayName:''),
+    data:(b.data||[]).map(stripOwner),
+    patients:b.patients||[],
+    packages:(b.packages||[]).map(stripOwner),
+    patientPhones:b.patientPhones||{}
+  }).catch(e=>{console.error(e);alert('Não foi possível salvar na nuvem agora. Verifique sua internet e tente de novo.');});
+}
+function mergeAndRender(){
+  data=[];packages=[];patients=[];patientPhones={};professionalsRoster=[];
+  Object.entries(profDocs).forEach(([uid,d])=>{
+    if(uid==='main') return; // legacy pre-migration doc, not a real professional
+    (d.data||[]).forEach(a=>data.push({...a,_ownerUid:uid}));
+    (d.packages||[]).forEach(p=>packages.push({...p,_ownerUid:uid}));
+    (d.patients||[]).forEach(p=>{ if(!patients.includes(p)) patients.push(p); });
+    Object.entries(d.patientPhones||{}).forEach(([k,v])=>{ patientPhones[k]=v; });
+    professionalsRoster.push({uid,name:d.displayName||'(sem nome)'});
+  });
+  professionalsRoster.sort((a,b)=>a.name.localeCompare(b.name));
+  render();refreshOpenModals();
 }
 
 function doLogin(){
@@ -219,45 +248,78 @@ function refreshOpenModals(){
 function offerLocalMigrationIfAny(){
   const localData=JSON.parse(localStorage.getItem(KEY)||'[]');
   const localPatients=JSON.parse(localStorage.getItem(KEY+'_patients')||'[]');
-  const localProfessionals=JSON.parse(localStorage.getItem(KEY+'_professionals')||'[]');
   const localPackages=JSON.parse(localStorage.getItem(KEY+'_packages')||'[]');
   const localPhones=JSON.parse(localStorage.getItem(KEY+'_patientPhones')||'{}');
-  const hasLocal=localData.length||localPatients.length||localProfessionals.length||localPackages.length;
-  if(hasLocal && confirm('Encontramos dados salvos neste aparelho (pacientes, atendimentos, pacotes). Deseja enviá-los agora para a nuvem, para sincronizar com os outros dispositivos?\n\nSó faça isso uma vez, no primeiro aparelho que atualizar.')){
-    data=localData;patients=localPatients;professionals=localProfessionals;packages=localPackages;patientPhones=localPhones;
-    saveAll();
+  const hasLocal=localData.length||localPatients.length||localPackages.length;
+  if(hasLocal && confirm('Encontramos dados salvos neste aparelho (pacientes, atendimentos, pacotes). Deseja enviá-los agora para a nuvem, para sincronizar com os outros dispositivos?')){
+    myDisplayName=myDisplayName||'Sheila Barbosa';
+    db.collection('agenda').doc(myUid).set({displayName:myDisplayName,data:localData,patients:localPatients,packages:localPackages,patientPhones:localPhones});
   }else{
-    render();
+    db.collection('agenda').doc(myUid).set({displayName:myDisplayName||'Profissional',data:[],patients:[],packages:[],patientPhones:{}});
   }
+}
+function bootstrapNewProfessional(){
+  const name=(prompt('Bem-vindo(a)! Qual o seu nome, como profissional aparecerá na agenda?','')||'Profissional').trim();
+  myDisplayName=name;
+  db.collection('agenda').doc(myUid).set({displayName:myDisplayName,data:[],patients:[],packages:[],patientPhones:{}});
+}
+let ownDocChecked=false;
+async function ensureOwnDocExists(){
+  if(ownDocChecked) return; ownDocChecked=true;
+  if(profDocs[myUid]) return;
+  const oldSnap=await mainDocRef.get().catch(()=>null);
+  if(oldSnap && oldSnap.exists){
+    const od=oldSnap.data();
+    if(confirm('Encontramos os dados antigos da agenda (de antes dos logins por profissional). Deseja migrá-los agora para o seu espaço, como administradora?')){
+      myDisplayName='Sheila Barbosa';
+      await db.collection('agenda').doc(myUid).set({displayName:myDisplayName,data:od.data||[],patients:od.patients||[],packages:od.packages||[],patientPhones:od.patientPhones||{}});
+      return;
+    }
+  }
+  offerLocalMigrationIfAny();
 }
 
 function startFirestoreSync(){
-  let migrationChecked=false;
-  firestoreUnsub=mainDocRef.onSnapshot(doc=>{
-    const d=doc.data();
-    if(d){
-      data=d.data||[];patients=d.patients||[];professionals=d.professionals||[];packages=d.packages||[];patientPhones=d.patientPhones||{};
-      render();refreshOpenModals();
-    }else if(!migrationChecked){
-      migrationChecked=true;
-      offerLocalMigrationIfAny();
-    }else{
-      data=[];patients=[];professionals=[];packages=[];patientPhones={};
-      render();
-    }
-  },err=>{
-    console.error(err);
-    alert('Não foi possível conectar à agenda na nuvem. Verifique sua internet.');
-  });
+  if(isAdmin){
+    firestoreUnsub=db.collection('agenda').onSnapshot(snap=>{
+      profDocs={};
+      snap.forEach(doc=>{ profDocs[doc.id]=doc.data()||{}; });
+      mergeAndRender();
+      ensureOwnDocExists();
+    },err=>{console.error(err);alert('Não foi possível conectar à agenda na nuvem. Verifique sua internet.');});
+  }else{
+    const myRef=db.collection('agenda').doc(myUid);
+    let checked=false;
+    firestoreUnsub=myRef.onSnapshot(doc=>{
+      const d=doc.data();
+      if(d){
+        myDisplayName=d.displayName||myDisplayName;
+        profDocs={[myUid]:d};
+        mergeAndRender();
+      }else if(!checked){
+        checked=true;
+        bootstrapNewProfessional();
+      }else{
+        profDocs={[myUid]:{displayName:myDisplayName,data:[],patients:[],packages:[],patientPhones:{}}};
+        mergeAndRender();
+      }
+    },err=>{console.error(err);alert('Não foi possível conectar à agenda na nuvem. Verifique sua internet.');});
+  }
 }
 
-auth.onAuthStateChanged(user=>{
+auth.onAuthStateChanged(async user=>{
   if(user){
+    myUid=user.uid;
+    try{
+      const adminSnap=await db.collection('admins').doc(myUid).get();
+      isAdmin=adminSnap.exists;
+    }catch(e){ isAdmin=false; }
     document.getElementById('loginScreen').classList.remove('show');
     document.getElementById('appRoot').style.display='block';
     startFirestoreSync();
   }else{
     if(firestoreUnsub){firestoreUnsub();firestoreUnsub=null;}
+    myUid=null;isAdmin=false;myDisplayName='';profDocs={};ownDocChecked=false;
     document.getElementById('loginScreen').classList.add('show');
     document.getElementById('appRoot').style.display='none';
   }
@@ -320,7 +382,7 @@ function packageProgress(a){
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
 function changeWeek(n){weekOffset+=n;render()}
 function showToday(){weekOffset=0;render();window.scrollTo({top:0,behavior:'smooth'})}
-function populateSelects(selectedPatient='', selectedProfessional=''){
+function populateSelects(selectedPatient='', selectedProfessionalUid=''){
  const ps=document.getElementById('patientSelect');
  ps.innerHTML='<option value="">Selecione o paciente</option><option value="__new__">+ Novo paciente...</option>'+patients.slice().sort().map(n=>`<option>${escapeHtml(n)}</option>`).join('');
  if(selectedPatient && !patients.includes(selectedPatient)) ps.innerHTML+=`<option>${escapeHtml(selectedPatient)}</option>`;
@@ -328,11 +390,13 @@ function populateSelects(selectedPatient='', selectedProfessional=''){
  document.getElementById('patient').style.display='none';
  document.getElementById('patientPhone').value=patientPhones[selectedPatient]||'';
  document.getElementById('importContactBtn').style.display='none';
+
  const pr=document.getElementById('professionalSelect');
- pr.innerHTML='<option value="">Selecione o profissional</option><option value="__new__">+ Novo profissional...</option>'+professionals.slice().sort().map(n=>`<option>${escapeHtml(n)}</option>`).join('');
- if(selectedProfessional && !professionals.includes(selectedProfessional)) pr.innerHTML+=`<option>${escapeHtml(selectedProfessional)}</option>`;
- pr.value=selectedProfessional;
- document.getElementById('professional').style.display='none';
+ const roster=professionalsRoster.slice().sort((a,b)=>a.name.localeCompare(b.name));
+ pr.innerHTML='<option value="">Selecione o profissional</option>'+roster.map(p=>`<option value="${p.uid}">${escapeHtml(p.name)}</option>`).join('');
+ pr.value=selectedProfessionalUid||(isAdmin?'':myUid);
+ pr.disabled=!isAdmin||!!document.getElementById('editId').value;
+ populatePackageSelect();
 }
 function syncPatientName(){
  const sel=document.getElementById('patientSelect');
@@ -347,6 +411,7 @@ function syncPatientName(){
    document.getElementById('patientPhone').value=patientPhones[sel.value]||'';
    importBtn.style.display='none';
  }
+ populatePackageSelect();
 }
 function supportsContactPicker(){
  return !!(navigator.contacts && navigator.contacts.select && window.ContactsManager);
@@ -363,15 +428,6 @@ async function importContact(){
    alert('Não foi possível acessar os contatos agora.\n\nDetalhe técnico: '+(e&&e.name?e.name+' — '+e.message:String(e)));
  }
 }
-function syncProfessionalName(){
- const sel=document.getElementById('professionalSelect');
- const input=document.getElementById('professional');
- if(sel.value==='__new__'){
-   input.style.display='block';input.value='';input.focus();
- }else{
-   input.style.display='none';input.value=sel.value;
- }
-}
 function togglePackage(){
  const v=document.getElementById('paymentMethod').value;
  document.getElementById('packageOptions').style.display=v==='Pacote'?'block':'none';
@@ -380,7 +436,8 @@ function togglePackage(){
 function populatePackageSelect(selected=''){
  const s=document.getElementById('packageSelect');
  const name=document.getElementById('patientSelect').value;
- const available=packages.filter(p=>p.patient===name && p.remaining>0);
+ const targetUid=document.getElementById('professionalSelect').value;
+ const available=packages.filter(p=>p.patient===name && p.remaining>0 && p._ownerUid===targetUid);
  s.innerHTML='<option value="">Selecione o pacote</option>'+available.map(p=>`<option value="${p.id}">${escapeHtml(p.label)} — ${p.remaining} crédito(s)</option>`).join('');
  s.value=selected;
 }
@@ -389,7 +446,7 @@ function openNew(ds){
  document.getElementById('patient').value='';populateSelects('','');document.getElementById('date').value=ds||iso(new Date());
  document.getElementById('time').value='';document.getElementById('duration').value='50 minutos';
  document.getElementById('recurring').value='nao';document.getElementById('recurringCount').value='8';document.getElementById('recurringOptions').style.display='none';
- document.getElementById('professional').value='';document.getElementById('type').value='Particular';document.getElementById('value').value='150';
+ document.getElementById('type').value='Particular';document.getElementById('value').value='150';
  document.getElementById('paymentMethod').value='Avulso';document.getElementById('packageOptions').style.display='none';populatePackageSelect();
  document.getElementById('status').value='confirmado';document.getElementById('note').value='';
  document.getElementById('deleteBtn').style.display='none';document.getElementById('modal').classList.add('show');
@@ -397,9 +454,8 @@ function openNew(ds){
 function editAppointment(id){
  let a=data.find(x=>x.id===id);if(!a)return;
  openNew(a.date);document.getElementById('modalTitle').textContent='Editar atendimento';document.getElementById('editId').value=id;
- populateSelects(a.patient||'',a.professional||'');
+ populateSelects(a.patient||'',a._ownerUid||'');
  document.getElementById('patient').value=a.patient||'';
- document.getElementById('professional').value=a.professional||'';
  ['date','time','duration','type','value','status','note'].forEach(k=>document.getElementById(k).value=a[k]||'');
  document.getElementById('paymentMethod').value=a.paymentMethod||'Avulso';
  document.getElementById('packageOptions').style.display=a.paymentMethod==='Pacote'?'block':'none';
@@ -413,52 +469,55 @@ function toggleRecurring(){
  document.getElementById('recurringOptions').style.display=v==='nao'?'none':'block';
 }
 function saveAppointment(){
+ const targetUid=document.getElementById('professionalSelect').value;
+ if(!targetUid){alert('Selecione o profissional responsável.');return}
+ const profEntry=professionalsRoster.find(p=>p.uid===targetUid);
+ const professional=profEntry?profEntry.name:myDisplayName;
+
  const patientSel=document.getElementById('patientSelect').value;
- const professionalSel=document.getElementById('professionalSelect').value;
  const patient=patientSel==='__new__' ? document.getElementById('patient').value.trim() : patientSel;
- const professional=professionalSel==='__new__' ? document.getElementById('professional').value.trim() : professionalSel;
+
  let a={id:document.getElementById('editId').value||Date.now().toString(),
  patient,date:document.getElementById('date').value,time:document.getElementById('time').value,
  duration:document.getElementById('duration').value,professional,type:document.getElementById('type').value,value:parseFloat(document.getElementById('value').value)||0,
  paymentMethod:document.getElementById('paymentMethod').value,packageId:document.getElementById('packageSelect').value||'',
  status:document.getElementById('status').value,note:document.getElementById('note').value};
  if(!a.patient||!a.date||!a.time){alert('Preencha paciente, data e horário.');return}
- if(!a.professional){alert('Selecione o profissional responsável.');return}
 
- if(!patients.includes(a.patient)) patients.push(a.patient);
- if(!professionals.includes(a.professional)) professionals.push(a.professional);
+ const bucket=bucketFor(targetUid);
+ if(!bucket.patients.includes(a.patient)) bucket.patients.push(a.patient);
  const phone=document.getElementById('patientPhone').value.trim();
- if(phone) patientPhones[a.patient]=phone;
+ if(phone) bucket.patientPhones[a.patient]=phone;
 
- let idx=data.findIndex(x=>x.id===a.id);
+ let idx=bucket.data.findIndex(x=>x.id===a.id);
  if(idx>=0){
    // If an existing package appointment is changed away from the package, return its credit.
-   const old=data[idx];
+   const old=bucket.data[idx];
    if(old.paymentMethod==='Pacote' && old.packageId && old.packageId!==a.packageId){
-     const op=packages.find(p=>p.id===old.packageId); if(op) op.remaining=Math.min(op.total,op.remaining+1);
+     const op=bucket.packages.find(p=>p.id===old.packageId); if(op) op.remaining=Math.min(op.total,op.remaining+1);
    }
    if(a.paymentMethod==='Pacote'){
-     const pkg=packages.find(p=>p.id===a.packageId);
+     const pkg=bucket.packages.find(p=>p.id===a.packageId);
      if(!pkg || pkg.remaining<=0){alert('Este pacote não possui créditos disponíveis.');return}
      // Only consume if it wasn't already consuming this same package.
      if(!(old.paymentMethod==='Pacote' && old.packageId===a.packageId)) pkg.remaining--;
    }
-   data[idx]=a;
+   bucket.data[idx]=a;
  }else{
    const recurrence=document.getElementById('recurring').value;
    if(recurrence==='nao'){
      if(a.paymentMethod==='Pacote'){
-       const pkg=packages.find(p=>p.id===a.packageId);
+       const pkg=bucket.packages.find(p=>p.id===a.packageId);
        if(!pkg || pkg.remaining<=0){alert('Este pacote não possui créditos disponíveis.');return}
        pkg.remaining--;
      }
-     data.push(a);
+     bucket.data.push(a);
    }else{
      const count=parseInt(document.getElementById('recurringCount').value,10);
      if(!count || count<2 || count>52){alert('Informe entre 2 e 52 ocorrências.');return}
      let pkg=null, pkgCount=count;
      if(a.paymentMethod==='Pacote'){
-       pkg=packages.find(p=>p.id===a.packageId);
+       pkg=bucket.packages.find(p=>p.id===a.packageId);
        const available=pkg?pkg.remaining:0;
        if(available<=0){alert('Este pacote não possui créditos disponíveis.');return}
        if(available<count){
@@ -471,7 +530,7 @@ function saveAppointment(){
      let d=new Date(a.date+'T12:00:00');
      for(let i=0;i<count;i++){
        const usesPackage=pkg && i<pkgCount;
-       data.push({...a,id:(Date.now()+Math.random()+i).toString(),date:iso(d),recurrence:recurrence,recurrenceGroup:a.id,
+       bucket.data.push({...a,id:(Date.now()+Math.random()+i).toString(),date:iso(d),recurrence:recurrence,recurrenceGroup:a.id,
          paymentMethod:usesPackage?'Pacote':'Avulso',
          packageId:usesPackage?a.packageId:''});
        d.setDate(d.getDate()+step);
@@ -479,16 +538,19 @@ function saveAppointment(){
      if(pkg) pkg.remaining-=pkgCount;
    }
  }
- saveAll();closeModal();render();
+ persist(targetUid);mergeAndRender();closeModal();
 }
 function deleteAppointment(){
  let id=document.getElementById('editId').value;
+ const old=data.find(a=>a.id===id);if(!old)return;
+ const targetUid=old._ownerUid;
  if(confirm('Excluir este atendimento?')){
-   const old=data.find(a=>a.id===id);
-   if(old && old.paymentMethod==='Pacote' && old.packageId){
-     const pkg=packages.find(p=>p.id===old.packageId); if(pkg) pkg.remaining=Math.min(pkg.total,pkg.remaining+1);
+   const bucket=bucketFor(targetUid);
+   if(old.paymentMethod==='Pacote' && old.packageId){
+     const pkg=bucket.packages.find(p=>p.id===old.packageId); if(pkg) pkg.remaining=Math.min(pkg.total,pkg.remaining+1);
    }
-   data=data.filter(a=>a.id!==id);saveAll();closeModal();render()
+   bucket.data=bucket.data.filter(a=>a.id!==id);
+   persist(targetUid);mergeAndRender();closeModal();
  }
 }
 function openPatientDetails(){
@@ -525,17 +587,21 @@ function openPatients(){
  alert(names.length?`Pacientes cadastrados nesta agenda:\n\n${names.join('\n')}`:'Ainda não há pacientes cadastrados.');
 }
 function openProfessionals(){
- let names=[...new Set(data.map(a=>a.professional).filter(Boolean))].sort();
- if(!names.length){alert('Ainda não há profissionais cadastrados nos atendimentos.');return}
- let lines=names.map(n=>{
-   let total=data.filter(a=>a.professional===n).length;
-   return `${n} — ${total} atendimento${total===1?'':'s'}`;
+ if(!professionalsRoster.length){alert('Nenhum profissional cadastrado.');return}
+ let lines=professionalsRoster.map(p=>{
+   let total=data.filter(a=>a._ownerUid===p.uid).length;
+   return `${p.name} — ${total} atendimento${total===1?'':'s'}`;
  }).join('\n');
- alert('Profissionais da equipe nesta agenda:\n\n'+lines);
+ alert('Profissionais da equipe:\n\n'+lines);
 }
 function openPackages(){
  const ps=document.getElementById('newPkgPatientSelect');
  ps.innerHTML=patients.slice().sort().map(n=>`<option>${escapeHtml(n)}</option>`).join('')||'<option value="">Cadastre um paciente primeiro</option>';
+ const prs=document.getElementById('newPkgProfessionalSelect');
+ const roster=professionalsRoster.slice().sort((a,b)=>a.name.localeCompare(b.name));
+ prs.innerHTML='<option value="">Selecione o profissional</option>'+roster.map(p=>`<option value="${p.uid}">${escapeHtml(p.name)}</option>`).join('');
+ prs.value=isAdmin?'':myUid;
+ prs.disabled=!isAdmin;
  renderPackagesList();
  document.getElementById('packagesModal').classList.add('show');
 }
@@ -543,33 +609,40 @@ function closePackages(){document.getElementById('packagesModal').classList.remo
 function renderPackagesList(){
  const box=document.getElementById('packagesList');
  if(!packages.length){box.innerHTML='<small>Nenhum pacote cadastrado.</small>';return}
- box.innerHTML=packages.slice().sort((a,b)=>a.patient.localeCompare(b.patient)).map(p=>`
-   <div class="card" style="margin-top:8px;padding:10px">
+ box.innerHTML=packages.slice().sort((a,b)=>a.patient.localeCompare(b.patient)).map(p=>{
+   const profName=(professionalsRoster.find(r=>r.uid===p._ownerUid)||{}).name||'';
+   return `<div class="card" style="margin-top:8px;padding:10px">
      <div class="row between">
-       <div><b>${escapeHtml(p.patient)}</b><br><small>${escapeHtml(p.label)} — ${p.remaining}/${p.total} crédito(s) — R$ ${p.price.toFixed(2)}</small></div>
+       <div><b>${escapeHtml(p.patient)}</b>${profName?` <small>(${escapeHtml(profName)})</small>`:''}<br><small>${escapeHtml(p.label)} — ${p.remaining}/${p.total} crédito(s) — R$ ${p.price.toFixed(2)}</small></div>
        <button class="danger" onclick="deletePackage('${p.id}')">Excluir</button>
      </div>
-   </div>`).join('');
+   </div>`;
+ }).join('');
 }
 function deletePackage(id){
  const pkg=packages.find(p=>p.id===id);
  if(!pkg) return;
+ const targetUid=pkg._ownerUid;
  const linked=data.filter(a=>a.packageId===id);
  let msg=`Excluir o pacote "${pkg.label}" de ${pkg.patient}?`;
  if(linked.length) msg+=`\n\n${linked.length} atendimento(s) estão vinculados a este pacote. Eles não serão apagados, mas ficarão sem pacote válido (o indicador de crédito some do card).`;
  if(!confirm(msg)) return;
- packages=packages.filter(p=>p.id!==id);
- saveAll();renderPackagesList();
+ const bucket=bucketFor(targetUid);
+ bucket.packages=bucket.packages.filter(p=>p.id!==id);
+ persist(targetUid);mergeAndRender();
 }
 function createPackage(){
+ const targetUid=document.getElementById('newPkgProfessionalSelect').value;
+ if(!targetUid){alert('Selecione o profissional.');return}
  const patient=document.getElementById('newPkgPatientSelect').value;
  if(!patient){alert('Cadastre um paciente antes de criar um pacote (em um atendimento, ou pelo atalho Pacientes).');return}
  const total=parseInt(document.getElementById('newPkgTotal').value,10);
  if(!total || total<1){alert('Informe uma quantidade válida de atendimentos.');return}
  const price=parseFloat(document.getElementById('newPkgPrice').value);
  if(isNaN(price)){alert('Informe um valor válido.');return}
- packages.push({id:Date.now().toString(),patient,label:`Pacote ${total} atendimentos`,total,remaining:total,price,created:new Date().toISOString()});
- saveAll();renderPackagesList();
+ const bucket=bucketFor(targetUid);
+ bucket.packages.push({id:Date.now().toString(),patient,label:`Pacote ${total} atendimentos`,total,remaining:total,price,created:new Date().toISOString()});
+ persist(targetUid);mergeAndRender();
 }
 function openFinance(){
  const month=prompt('Informe o mês para consolidar (MM/AAAA):', `${pad(new Date().getMonth()+1)}/${new Date().getFullYear()}`);
@@ -592,7 +665,7 @@ function openFinance(){
  alert(msg);
 }
 function exportData(){
- let backup={atendimentos:data,pacientes:patients,profissionais:professionals,packages};
+ let backup={atendimentos:data,pacientes:patients,profissionais:professionalsRoster.map(p=>p.name),packages};
  let json=JSON.stringify(backup,null,2);
  let filename='agenda-psicologa-backup-'+iso(new Date())+'.json';
  let blob=new Blob([json],{type:'application/json'});let url=URL.createObjectURL(blob);
@@ -610,6 +683,8 @@ function exportData(){
   <div class="row between"><h2 style="margin:0">Pacotes</h2><button class="light" onclick="closePackages()">✕</button></div>
   <div id="packagesList" style="margin-top:12px"></div>
   <h3 style="margin-top:18px">Novo pacote</h3>
+  <label>Profissional</label>
+  <select id="newPkgProfessionalSelect"></select>
   <label>Paciente</label>
   <select id="newPkgPatientSelect"></select>
   <label>Quantidade de atendimentos</label>
