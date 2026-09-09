@@ -122,8 +122,8 @@ small{color:var(--text-faint)}
     <button class="light" onclick="openPatientDetails()">📋 Ficha do paciente</button>
     <button class="light" onclick="openProfessionals()">👩‍⚕️ Profissionais</button>
     <button class="light" onclick="openPackages()">🎟️ Pacotes</button>
-    <button class="light" onclick="openFinance()">💰 Financeiro</button>
-    <button class="light" onclick="exportData()">💾 Exportar agenda</button>
+    <button class="light" id="btnFinance" onclick="openFinance()">💰 Financeiro</button>
+    <button class="light" id="btnExport" onclick="exportData()">💾 Exportar agenda</button>
     <button class="light" onclick="doLogout()">🚪 Sair</button>
   </div>
 </div>
@@ -157,7 +157,7 @@ small{color:var(--text-faint)}
 <small>Só aparecem profissionais com login cadastrado.</small>
 <label>Modalidade</label>
 <select id="type"><option>Particular</option><option>Moinhos</option><option>Social</option></select>
-  <label>Valor do atendimento (R$)</label><input id="value" type="number" step="0.01" placeholder="150">
+  <div id="valueField"><label>Valor do atendimento (R$)</label><input id="value" type="number" step="0.01" placeholder="150"></div>
   <label>Forma de pagamento</label>
   <select id="paymentMethod" onchange="togglePackage()">
     <option>Avulso</option>
@@ -225,7 +225,14 @@ function mergeAndRender(){
     professionalsRoster.push({uid,name:d.displayName||'(sem nome)'});
   });
   professionalsRoster.sort((a,b)=>a.name.localeCompare(b.name));
+  applyRoleVisibility();
   render();refreshOpenModals();
+}
+function applyRoleVisibility(){
+  const vf=document.getElementById('valueField'); if(vf) vf.style.display=isAdmin?'block':'none';
+  const bf=document.getElementById('btnFinance'); if(bf) bf.style.display=isAdmin?'inline-block':'none';
+  const be=document.getElementById('btnExport'); if(be) be.style.display=isAdmin?'inline-block':'none';
+  const np=document.getElementById('newPackageSection'); if(np) np.style.display=isAdmin?'block':'none';
 }
 
 function doLogin(){
@@ -316,6 +323,7 @@ auth.onAuthStateChanged(async user=>{
     }catch(e){ isAdmin=false; }
     document.getElementById('loginScreen').classList.remove('show');
     document.getElementById('appRoot').style.display='block';
+    applyRoleVisibility();
     startFirestoreSync();
   }else{
     if(firestoreUnsub){firestoreUnsub();firestoreUnsub=null;}
@@ -446,7 +454,7 @@ function openNew(ds){
  document.getElementById('patient').value='';populateSelects('','');document.getElementById('date').value=ds||iso(new Date());
  document.getElementById('time').value='';document.getElementById('duration').value='50 minutos';
  document.getElementById('recurring').value='nao';document.getElementById('recurringCount').value='8';document.getElementById('recurringOptions').style.display='none';
- document.getElementById('type').value='Particular';document.getElementById('value').value='150';
+ document.getElementById('type').value='Particular';document.getElementById('value').value=isAdmin?'150':'0';
  document.getElementById('paymentMethod').value='Avulso';document.getElementById('packageOptions').style.display='none';populatePackageSelect();
  document.getElementById('status').value='confirmado';document.getElementById('note').value='';
  document.getElementById('deleteBtn').style.display='none';document.getElementById('modal').classList.add('show');
@@ -569,14 +577,14 @@ function renderPatientDetails(){
  const future=ap.filter(a=>a.date>=iso(new Date()) && a.status!=='cancelado');
  const history=ap.filter(a=>a.date<iso(new Date()) || a.status==='atendido');
  let total=ap.reduce((s,a)=>s+(a.value||0),0);
- let packageHtml=pk.length ? pk.map(p=>`<div class="card" style="margin-top:8px;padding:10px"><b>${escapeHtml(p.label)}</b><br>Créditos: <b>${p.remaining}</b> de ${p.total}<br>Valor pago: R$ ${p.price.toFixed(2)}</div>`).join('') : '<small>Nenhum pacote cadastrado.</small>';
+ let packageHtml=pk.length ? pk.map(p=>`<div class="card" style="margin-top:8px;padding:10px"><b>${escapeHtml(p.label)}</b><br>Créditos: <b>${p.remaining}</b> de ${p.total}${isAdmin?`<br>Valor pago: R$ ${p.price.toFixed(2)}`:''}</div>`).join('') : '<small>Nenhum pacote cadastrado.</small>';
  let nextHtml=future.length ? future.slice(0,10).map(a=>`<div style="padding:8px 0;border-bottom:1px solid #eee"><b>${brDate(a.date)} ${a.time}</b> — ${escapeHtml(a.professional)}<br><small>${a.type} • ${label(a.status)}${a.paymentMethod==='Pacote'?' • 🎟️ '+packageProgress(a):''}</small></div>`).join('') : '<small>Nenhum próximo atendimento.</small>';
  let histHtml=history.slice(-10).reverse().map(a=>`<div style="padding:8px 0;border-bottom:1px solid #eee">${brDate(a.date)} ${a.time} — ${escapeHtml(a.professional)} — ${label(a.status)}</div>`).join('') || '<small>Sem histórico.</small>';
  const phone=patientPhones[name];
  box.innerHTML=`<h3 style="margin-bottom:6px">${escapeHtml(name)}</h3>
    ${phone?`<div>📞 ${escapeHtml(phone)}</div>`:''}
    <div class="stats"><div class="stat"><small>Atendimentos</small><div class="num">${ap.length}</div></div>
-   <div class="stat"><small>Valor lançado</small><div class="num" style="font-size:16px">R$ ${total.toFixed(2)}</div></div>
+   ${isAdmin?`<div class="stat"><small>Valor lançado</small><div class="num" style="font-size:16px">R$ ${total.toFixed(2)}</div></div>`:''}
    <div class="stat"><small>Pacotes</small><div class="num">${pk.length}</div></div></div>
    <h3>🎟️ Créditos</h3>${packageHtml}
    <h3>📅 Próximos atendimentos</h3>${nextHtml}
@@ -611,15 +619,17 @@ function renderPackagesList(){
  if(!packages.length){box.innerHTML='<small>Nenhum pacote cadastrado.</small>';return}
  box.innerHTML=packages.slice().sort((a,b)=>a.patient.localeCompare(b.patient)).map(p=>{
    const profName=(professionalsRoster.find(r=>r.uid===p._ownerUid)||{}).name||'';
+   const priceText=isAdmin?` — R$ ${p.price.toFixed(2)}`:'';
    return `<div class="card" style="margin-top:8px;padding:10px">
      <div class="row between">
-       <div><b>${escapeHtml(p.patient)}</b>${profName?` <small>(${escapeHtml(profName)})</small>`:''}<br><small>${escapeHtml(p.label)} — ${p.remaining}/${p.total} crédito(s) — R$ ${p.price.toFixed(2)}</small></div>
-       <button class="danger" onclick="deletePackage('${p.id}')">Excluir</button>
+       <div><b>${escapeHtml(p.patient)}</b>${profName?` <small>(${escapeHtml(profName)})</small>`:''}<br><small>${escapeHtml(p.label)} — ${p.remaining}/${p.total} crédito(s)${priceText}</small></div>
+       ${isAdmin?`<button class="danger" onclick="deletePackage('${p.id}')">Excluir</button>`:''}
      </div>
    </div>`;
  }).join('');
 }
 function deletePackage(id){
+ if(!isAdmin){alert('Somente a administradora pode excluir pacotes.');return}
  const pkg=packages.find(p=>p.id===id);
  if(!pkg) return;
  const targetUid=pkg._ownerUid;
@@ -632,6 +642,7 @@ function deletePackage(id){
  persist(targetUid);mergeAndRender();
 }
 function createPackage(){
+ if(!isAdmin){alert('Somente a administradora pode criar pacotes.');return}
  const targetUid=document.getElementById('newPkgProfessionalSelect').value;
  if(!targetUid){alert('Selecione o profissional.');return}
  const patient=document.getElementById('newPkgPatientSelect').value;
@@ -645,6 +656,7 @@ function createPackage(){
  persist(targetUid);mergeAndRender();
 }
 function openFinance(){
+ if(!isAdmin){alert('Função disponível apenas para a administradora.');return}
  const month=prompt('Informe o mês para consolidar (MM/AAAA):', `${pad(new Date().getMonth()+1)}/${new Date().getFullYear()}`);
  if(!month) return;
  const [mm,yyyy]=month.split('/');
@@ -665,6 +677,7 @@ function openFinance(){
  alert(msg);
 }
 function exportData(){
+ if(!isAdmin){alert('Função disponível apenas para a administradora.');return}
  let backup={atendimentos:data,pacientes:patients,profissionais:professionalsRoster.map(p=>p.name),packages};
  let json=JSON.stringify(backup,null,2);
  let filename='agenda-psicologa-backup-'+iso(new Date())+'.json';
@@ -682,16 +695,18 @@ function exportData(){
 <div class="modal" id="packagesModal"><div class="modalbox">
   <div class="row between"><h2 style="margin:0">Pacotes</h2><button class="light" onclick="closePackages()">✕</button></div>
   <div id="packagesList" style="margin-top:12px"></div>
-  <h3 style="margin-top:18px">Novo pacote</h3>
-  <label>Profissional</label>
-  <select id="newPkgProfessionalSelect"></select>
-  <label>Paciente</label>
-  <select id="newPkgPatientSelect"></select>
-  <label>Quantidade de atendimentos</label>
-  <input id="newPkgTotal" type="number" min="1" value="4">
-  <label>Valor total pago (R$)</label>
-  <input id="newPkgPrice" type="number" step="0.01" value="600">
-  <div class="actions"><button class="primary" onclick="createPackage()">Criar pacote</button></div>
+  <div id="newPackageSection">
+    <h3 style="margin-top:18px">Novo pacote</h3>
+    <label>Profissional</label>
+    <select id="newPkgProfessionalSelect"></select>
+    <label>Paciente</label>
+    <select id="newPkgPatientSelect"></select>
+    <label>Quantidade de atendimentos</label>
+    <input id="newPkgTotal" type="number" min="1" value="4">
+    <label>Valor total pago (R$)</label>
+    <input id="newPkgPrice" type="number" step="0.01" value="600">
+    <div class="actions"><button class="primary" onclick="createPackage()">Criar pacote</button></div>
+  </div>
 </div></div>
 </div>
 </body>
