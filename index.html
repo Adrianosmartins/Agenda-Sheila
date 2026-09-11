@@ -124,6 +124,7 @@ small{color:var(--text-faint)}
     <button class="light" onclick="openPackages()">🎟️ Pacotes</button>
     <button class="light" id="btnFinance" onclick="openFinance()">💰 Financeiro</button>
     <button class="light" id="btnExport" onclick="exportData()">💾 Exportar agenda</button>
+    <button class="light" onclick="renameMyself()">✏️ Meu nome</button>
     <button class="light" onclick="doLogout()">🚪 Sair</button>
   </div>
 </div>
@@ -266,9 +267,22 @@ function offerLocalMigrationIfAny(){
   }
 }
 function bootstrapNewProfessional(){
-  const name=(prompt('Bem-vindo(a)! Qual o seu nome, como profissional aparecerá na agenda?','')||'Profissional').trim();
+  let name='';
+  while(!name){
+    name=(prompt('Bem-vindo(a)! Para continuar, informe seu nome completo (é assim que vai aparecer na agenda):','')||'').trim();
+    if(!name) alert('É necessário informar um nome para continuar usando a agenda.');
+  }
   myDisplayName=name;
   db.collection('agenda').doc(myUid).set({displayName:myDisplayName,data:[],patients:[],packages:[],patientPhones:{}});
+}
+function renameMyself(){
+  const novo=(prompt('Digite seu nome completo (como deve aparecer na agenda):',myDisplayName)||'').trim();
+  if(!novo) return;
+  myDisplayName=novo;
+  const bucket=bucketFor(myUid);
+  bucket.displayName=novo;
+  persist(myUid);mergeAndRender();
+  alert('Nome atualizado.');
 }
 let ownDocChecked=false;
 async function ensureOwnDocExists(){
