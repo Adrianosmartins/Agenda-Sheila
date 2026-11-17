@@ -75,6 +75,9 @@ label{font-size:12px;color:var(--text-muted);display:block;margin:9px 0 4px}
 .modal{position:fixed;inset:0;background:var(--modal-overlay);display:none;align-items:flex-end;z-index:10}.modal.show{display:flex}
 .modalbox{background:var(--card-bg);color:var(--text);width:100%;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:18px}
 .actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.chip{padding:7px 13px;border-radius:999px;font-size:13px;background:var(--light-btn-bg);border:1px solid var(--input-border)}
+.chip.on{background:var(--primary);color:var(--primary-text);border-color:var(--primary)}
 small{color:var(--text-faint)}
 @media(min-width:700px){.modal{align-items:center}.modalbox{max-width:520px;margin:auto;border-radius:18px}}
 </style>
@@ -98,6 +101,12 @@ small{color:var(--text-faint)}
     <strong id="weekTitle"></strong>
     <button class="light" onclick="changeWeek(1)">Semana ›</button>
   </div>
+</div>
+
+<div class="card" id="filterCard" style="display:none">
+  <div class="row between"><strong>Profissionais</strong><button class="light" id="clearFilterBtn" onclick="clearProfFilter()" style="display:none">Mostrar todos</button></div>
+  <div class="chips" id="profFilter"></div>
+  <small id="filterHint" style="display:block;margin-top:7px"></small>
 </div>
 
 <div class="card">
@@ -156,6 +165,8 @@ small{color:var(--text-faint)}
   <label>Profissional responsável pelo atendimento</label>
 <select id="professionalSelect" onchange="populatePackageSelect()"></select>
 <small>Só aparecem profissionais com login cadastrado.</small>
+<label>Especialidade</label>
+<select id="specialty"><option value="">Selecione a especialidade</option><option>Psicólogo</option><option>Psicopedagogo</option><option>Fonoaudiólogo</option><option>Nutricionista</option></select>
 <label>Modalidade</label>
 <select id="type"><option>Particular</option><option>Moinhos</option><option>Social</option></select>
   <div id="valueField"><label>Valor do atendimento (R$)</label><input id="value" type="number" step="0.01" placeholder="150"></div>
@@ -354,7 +365,37 @@ const brDate=s=>{let [y,m,d]=s.split('-');return `${d}/${m}/${y}`};
 function monday(d){let x=new Date(d);let day=x.getDay();let diff=day===0?-6:1-day;x.setDate(x.getDate()+diff);x.setHours(0,0,0,0);return x}
 function startWeek(){let d=monday(new Date());d.setDate(d.getDate()+weekOffset*7);return d}
 function fmtShort(d){return d.toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit'}).replace('.','')}
+// Calendar professional filter. Empty selection = show everyone.
+let selectedProfs=new Set();
+function profFilterOptions(){
+ const seen=new Map();
+ data.forEach(a=>{
+   if(seen.has(a._ownerUid)) return;
+   const r=professionalsRoster.find(p=>p.uid===a._ownerUid);
+   seen.set(a._ownerUid,r?r.name:(a.professional||'(sem nome)'));
+ });
+ return [...seen].map(([uid,name])=>({uid,name})).sort((x,y)=>x.name.localeCompare(y.name));
+}
+function activeProfFilter(){
+ const avail=new Set(profFilterOptions().map(o=>o.uid));
+ return new Set([...selectedProfs].filter(u=>avail.has(u)));
+}
+function toggleProf(uid){ if(selectedProfs.has(uid)) selectedProfs.delete(uid); else selectedProfs.add(uid); render(); }
+function clearProfFilter(){ selectedProfs.clear(); render(); }
+function renderProfFilter(){
+ const opts=profFilterOptions();
+ const card=document.getElementById('filterCard');
+ if(opts.length<2){card.style.display='none';return}
+ card.style.display='block';
+ const act=activeProfFilter();
+ document.getElementById('profFilter').innerHTML=opts.map(o=>`<button class="chip${act.has(o.uid)?' on':''}" onclick="toggleProf('${o.uid}')">${escapeHtml(o.name)}</button>`).join('');
+ document.getElementById('clearFilterBtn').style.display=act.size?'inline-block':'none';
+ document.getElementById('filterHint').textContent=act.size?`Mostrando ${act.size} de ${opts.length} profissionais`:'Mostrando todos os profissionais. Toque em um nome para ver só ele.';
+}
 function render(){
+ renderProfFilter();
+ const act=activeProfFilter();
+ const view=act.size?data.filter(a=>act.has(a._ownerUid)):data;
  let s=startWeek(), cal=document.getElementById('calendar');cal.innerHTML='';
  document.getElementById('weekTitle').textContent=`${s.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})} – ${new Date(s.getTime()+6*864e5).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}`;
  let total=0, conf=0;
@@ -362,7 +403,7 @@ function render(){
    let d=new Date(s);d.setDate(s.getDate()+i);let ds=iso(d);
    let col=document.createElement('div');col.className='day';
    col.innerHTML=`<div class="dayhead">${fmtShort(d)}</div>`;
-   let appts=data.filter(a=>a.date===ds).sort((a,b)=>a.time.localeCompare(b.time));
+   let appts=view.filter(a=>a.date===ds).sort((a,b)=>a.time.localeCompare(b.time));
    if(!appts.length) col.innerHTML+=`<div class="slot free" onclick="openNew('${ds}')">+ horário livre</div>`;
    // Group by time so simultaneous appointments appear together.
    let groups={};
@@ -374,7 +415,7 @@ function render(){
        let div=document.createElement('div');div.className='slot '+a.status;
        div.innerHTML=`<div class="time">${a.time}</div>
          <div class="name">${escapeHtml(a.patient)}</div>
-         <div class="status">${escapeHtml(a.professional||'Profissional não informado')}</div>
+         <div class="status">${escapeHtml(a.professional||'Profissional não informado')}${a.specialty?' • '+escapeHtml(a.specialty):''}</div>
          <div class="status">${label(a.status)}${a.type?' • '+a.type:''}${a.recurrence?' • 🔄':''}${a.paymentMethod==='Pacote'?' • 🎟️ '+packageProgress(a):''}</div>`;
        div.onclick=()=>editAppointment(a.id);col.appendChild(div);
      });
@@ -468,7 +509,7 @@ function openNew(ds){
  document.getElementById('patient').value='';populateSelects('','');document.getElementById('date').value=ds||iso(new Date());
  document.getElementById('time').value='';document.getElementById('duration').value='50 minutos';
  document.getElementById('recurring').value='nao';document.getElementById('recurringCount').value='8';document.getElementById('recurringOptions').style.display='none';
- document.getElementById('type').value='Particular';document.getElementById('value').value=isAdmin?'150':'0';
+ document.getElementById('type').value='Particular';document.getElementById('value').value=isAdmin?'150':'0';document.getElementById('specialty').value='';
  document.getElementById('paymentMethod').value='Avulso';document.getElementById('packageOptions').style.display='none';populatePackageSelect();
  document.getElementById('status').value='confirmado';document.getElementById('note').value='';
  document.getElementById('deleteBtn').style.display='none';document.getElementById('modal').classList.add('show');
@@ -478,7 +519,7 @@ function editAppointment(id){
  openNew(a.date);document.getElementById('modalTitle').textContent='Editar atendimento';document.getElementById('editId').value=id;
  populateSelects(a.patient||'',a._ownerUid||'');
  document.getElementById('patient').value=a.patient||'';
- ['date','time','duration','type','value','status','note'].forEach(k=>document.getElementById(k).value=a[k]||'');
+ ['date','time','duration','type','value','status','note','specialty'].forEach(k=>document.getElementById(k).value=a[k]||'');
  document.getElementById('paymentMethod').value=a.paymentMethod||'Avulso';
  document.getElementById('packageOptions').style.display=a.paymentMethod==='Pacote'?'block':'none';
  populatePackageSelect(a.packageId||'');
@@ -503,8 +544,11 @@ function saveAppointment(){
  patient,date:document.getElementById('date').value,time:document.getElementById('time').value,
  duration:document.getElementById('duration').value,professional,type:document.getElementById('type').value,value:parseFloat(document.getElementById('value').value)||0,
  paymentMethod:document.getElementById('paymentMethod').value,packageId:document.getElementById('packageSelect').value||'',
- status:document.getElementById('status').value,note:document.getElementById('note').value};
+ status:document.getElementById('status').value,note:document.getElementById('note').value,
+ specialty:document.getElementById('specialty').value};
  if(!a.patient||!a.date||!a.time){alert('Preencha paciente, data e horário.');return}
+ // Required only for new appointments, so old ones (created before this field existed) can still be edited.
+ if(!document.getElementById('editId').value && !a.specialty){alert('Selecione a especialidade.');return}
 
  const bucket=bucketFor(targetUid);
  if(!bucket.patients.includes(a.patient)) bucket.patients.push(a.patient);
